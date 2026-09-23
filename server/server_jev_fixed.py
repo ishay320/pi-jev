@@ -198,11 +198,16 @@ async def evaluate(request: JevRequest):
         answers = {}
         for r in result.results:
             if r.kind == "noul":
-                # Map noul result: probability of "true" option
-                true_prob = r.probabilities.get("true", 0.5)
+                # Use conditional probability (normalized over true+false, excluding abstention)
+                # This matches the original openJev-verdict-2.0 engine behavior
+                if r.p_true_given_sufficient_evidence is not None:
+                    noul_value = r.p_true_given_sufficient_evidence
+                else:
+                    # Abstention case - return 0.5 as neutral
+                    noul_value = 0.5
                 answers[r.id] = NoulAnswer(
                     type="noul",
-                    noul=true_prob
+                    noul=noul_value
                 )
 
             elif r.kind == "choice":
