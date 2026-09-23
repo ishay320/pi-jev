@@ -3,16 +3,16 @@
 Implements the TypeSafe Jev API contract (POST /v1/systemone) so pi-jev can connect.
 """
 
-import sys
-import json
+from typing import Literal
 import time
+import json
+import sys
 from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
-
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
+from typing_extensions import Annotated
 # Add parent to path to import rlcd
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -46,24 +46,24 @@ def get_engine() -> DecisionEngine:
 
 
 class NoulQuestion(BaseModel):
-    type: str = "noul"
+    type: Literal["noul"] = "noul"
     instructions: Union[str, Dict[str, Any], List[Any]]
     criteria: Optional[Dict[str, Union[str, Dict[str, Any], List[Any]]]] = None
 
 
 class ChoiceQuestion(BaseModel):
-    type: str = "choice"
+    type: Literal["choice"] = "choice"
     instructions: Union[str, Dict[str, Any], List[Any]]
     criteria: Dict[str, Optional[Union[str, Dict[str, Any], List[Any]]]]
 
 
 class ScoreQuestion(BaseModel):
-    type: str = "score"
+    type: Literal["score"] = "score"
     instructions: Union[str, Dict[str, Any], List[Any]]
     criteria: List[Union[str, Dict[str, Any], List[Any]]]
 
 
-Question = Union[NoulQuestion, ChoiceQuestion, ScoreQuestion]
+Question = Annotated[Union[NoulQuestion, ChoiceQuestion, ScoreQuestion], Field(discriminator="type")]
 
 
 class JevRequest(BaseModel):
@@ -100,6 +100,7 @@ class JevResponse(BaseModel):
     answers: Dict[str, Answer]
     usage: Dict[str, int]
 
+JevRequest.model_rebuild()
 
 # FastAPI app
 app = FastAPI(title="OpenJev Jev-Compatible Server", version="1.0.0")
@@ -209,7 +210,7 @@ async def evaluate(request: JevRequest):
                     type="choice",
                     choice=r.selected_id,
                     probabilities=r.probabilities,
-                    confidence=r.confidence
+                    confidence=r.selected_probability
                 )
 
             elif r.kind == "score":
