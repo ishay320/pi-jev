@@ -42,9 +42,31 @@ function resolveApiKey(): string | null {
   return resolveApiKeySource()?.key ?? null;
 }
 
+/** Read TYPESAFE_BASE_URL from env.json if not in environment */
+function resolveBaseUrl(): string | undefined {
+  // Environment variable takes precedence
+  const envUrl = process.env.TYPESAFE_BASE_URL?.trim();
+  if (envUrl) return envUrl;
+
+  // Then check OMP env.json
+  const envPath = path.join(os.homedir(), ".omp", "agent", "env.json");
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, "utf8");
+      const env = JSON.parse(content);
+      return env.TYPESAFE_BASE_URL;
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return undefined;
+}
+
 export class JevClient {
   private client: TypeSafeClient | null = null;
   private apiKey: string | null = null;
+  private baseUrl: string | undefined;
   public stats: JevSessionStats = {
     requestsCount: 0,
     totalTokens: 0,
@@ -52,8 +74,8 @@ export class JevClient {
 
   constructor() {
     this.apiKey = resolveApiKey();
+    this.baseUrl = resolveBaseUrl();
   }
-
   public isConfigured(): boolean {
     return Boolean(resolveApiKeySource() || this.apiKey);
   }
@@ -75,7 +97,7 @@ export class JevClient {
       throw new Error("Missing TYPESAFE_API_KEY. Set it in environment or ~/.pi/agent/secrets/typesafe_api_key.");
     }
     if (!this.client) {
-      this.client = new TypeSafeClient({ apiKey: key });
+      this.client = new TypeSafeClient({ apiKey: key, baseURL: this.baseUrl });
     }
     return this.client;
   }

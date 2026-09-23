@@ -1,5 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { JevClient } from "../src/jev.js";
+import autoStartJevServer from "../src/auto_start_server.js";
 import { ToolRouter } from "../src/router.js";
 import { SkillRouter } from "../src/skills.js";
 import { AutoJev } from "../src/auto.js";
@@ -81,23 +85,30 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("jev", "jev: unconfigured");
       return;
     }
-    ctx.ui.setStatus(
-      "jev",
-      autoModel.enabled ? "jev: auto-model" : auto.enabled ? "jev: auto" : "jev: ready"
-    );
-  });
 
-  pi.on("session_before_compact", async (event, ctx) => {
-    const result = await compactor.compact(event, ctx);
-    if (!result.summary) return;
-    ctx.ui.setStatus("jev", `jev: compact kept ${result.kept}/${result.considered}`);
-    return {
-      compaction: {
-        summary: result.summary,
-        firstKeptEntryId: event.preparation.firstKeptEntryId,
-        tokensBefore: event.preparation.tokensBefore,
-      },
+    // Determine base status from upstream logic
+    const baseStatus = autoModel.enabled ? "jev: auto-model" : auto.enabled ? "jev: auto" : "jev: ready";
+    
+    // Check server status and append
+    const statusFile = join(homedir(), ".omp", "jev_server.status");
+    const updateStatus = () => {
+      try {
+        if (existsSync(statusFile)) {
+          const serverStatus = readFileSync(statusFile, "utf8").trim();
+          const suffix = serverStatus === "online" ? " (online)" : 
+                        serverStatus === "downloading" ? " (downloading)" : 
+                        " (offline)";
+          ctx.ui.setStatus("jev", baseStatus + suffix);
+        } else {
+          ctx.ui.setStatus("jev", baseStatus + " (offline)");
+        }
+      } catch {
+        ctx.ui.setStatus("jev", baseStatus + " (offline)");
+      }
     };
+    
+    updateStatus();
+    setInterval(updateStatus, 1000);
   });
 
   pi.on("after_provider_response", (event, ctx) => {
@@ -138,4 +149,6 @@ export default function (pi: ExtensionAPI) {
       },
     };
   });
+  // Auto-start local Jev server
+  autoStartJevServer(pi);
 }

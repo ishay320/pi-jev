@@ -6,3 +6,15 @@ dist/
 !.env.example
 *.log
 npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Model files (downloaded automatically)
+*.onnx
+*.safetensors
+
+# Model artifacts (downloaded automatically)
+server/artifacts/
